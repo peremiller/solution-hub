@@ -299,6 +299,19 @@
   .vt + .vt { border-left: 1px solid var(--line); }
   .vt.active { background: var(--accent-2); color: #0b1020; font-weight: 600; }
   .tablewrap { display: block; overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; }
+  .mapwrap { display: block; }
+  .vmap-head { font-size: 16px; font-weight: 650; margin-bottom: 14px; }
+  .vmap-sub { display: block; color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 3px; }
+  .vmap-svg { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); }
+  .vmap-val { fill: var(--txt); font-size: 13px; font-weight: 700; }
+  .vmap-lbl { fill: var(--muted); font-size: 11px; }
+  .vmap-list { margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px 22px; }
+  .vmap-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .vmap-rank { color: var(--grey); width: 18px; text-align: right; font-variant-numeric: tabular-nums; }
+  .vmap-name { flex: 0 0 200px; color: var(--txt); }
+  .vmap-bar { flex: 1; height: 8px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .vmap-bar > span { display: block; height: 100%; }
+  .vmap-pct { width: 26px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
   table.vtable { width: 100%; border-collapse: collapse; font-size: 13px; }
   table.vtable thead th {
     text-align: left; white-space: nowrap;
@@ -371,6 +384,7 @@
     <div class="viewtoggle" role="group" aria-label="View mode">
       <button type="button" id="viewCards" class="vt active" aria-pressed="true">▦ Cards</button>
       <button type="button" id="viewTable" class="vt" aria-pressed="false">▤ Table</button>
+      <button type="button" id="viewMap" class="vt" aria-pressed="false">🗺 Map</button>
     </div>
     <button class="reset" id="exportJson">Export JSON</button>
     <button class="reset" id="exportCsv">Export CSV</button>
@@ -4674,10 +4688,59 @@ function tableHTML(list) {
   return `<table class="vtable">${head}<tbody>${body}</tbody></table>`;
 }
 
+// World regions positioned on a 1000×470 equirectangular canvas (approx geography).
+const REGIONS = [
+  { name: "North America", x: 215, y: 150 },
+  { name: "Latin America & Caribbean", x: 290, y: 330 },
+  { name: "Europe", x: 520, y: 135 },
+  { name: "North Africa & Middle East", x: 565, y: 215 },
+  { name: "Sub-Saharan Africa", x: 545, y: 320 },
+  { name: "Central & South Asia", x: 685, y: 215 },
+  { name: "East Asia", x: 800, y: 185 },
+  { name: "Southeast Asia", x: 775, y: 290 },
+  { name: "Oceania", x: 860, y: 380 }
+];
+function regionPrevalence(domainKey, idx) {
+  const rng = mulberry32(hashKey(domainKey + "::" + idx));
+  return 15 + Math.floor(rng() * 86); // 15..100
+}
+function mapHTML() {
+  const d = activeDomain;
+  const accent = (d && d.accent) || "#4ad0ff";
+  const data = REGIONS.map((r, i) => ({ ...r, v: regionPrevalence(d ? d.key : "x", i) }));
+  const ranked = data.slice().sort((a, b) => b.v - a.v);
+  const bubbles = data.map(r => {
+    const rad = 9 + (r.v / 100) * 30;
+    const op = 0.22 + (r.v / 100) * 0.66;
+    return `<g>
+      <circle cx="${r.x}" cy="${r.y}" r="${rad}" fill="${accent}" fill-opacity="${op.toFixed(2)}" stroke="${accent}" stroke-opacity="0.9"></circle>
+      <text x="${r.x}" y="${r.y + 4}" text-anchor="middle" class="vmap-val">${r.v}</text>
+      <text x="${r.x}" y="${r.y + rad + 14}" text-anchor="middle" class="vmap-lbl">${escapeHTML(r.name)}</text>
+    </g>`;
+  }).join("");
+  const list = ranked.map((r, i) =>
+    `<div class="vmap-row"><span class="vmap-rank">${i + 1}</span><span class="vmap-name">${escapeHTML(r.name)}</span>
+      <span class="vmap-bar"><span style="width:${r.v}%;background:${accent}"></span></span><span class="vmap-pct">${r.v}</span></div>`
+  ).join("");
+  return `<div class="vmap-head">Where ${d ? escapeHTML(d.name) : "this domain"} solutions are most relevant
+    <span class="vmap-sub">Illustrative regional relevance index (0–100) — a seeded planning model, not measured data.</span></div>
+    <svg class="vmap-svg" viewBox="0 0 1000 470" role="img" aria-label="Regional relevance map">
+      <rect x="0" y="0" width="1000" height="470" rx="14" fill="var(--surface-2)"></rect>
+      ${bubbles}
+    </svg>
+    <div class="vmap-list">${list}</div>`;
+}
 function render() {
   const list = filteredSorted();
   countEl.textContent = `${list.length.toLocaleString()} of ${TOTAL.toLocaleString()} shown`;
   const slice = list.slice(0, renderLimit);
+  if (viewMode === "map") {
+    grid.className = "mapwrap";
+    grid.innerHTML = mapHTML();
+    emptyEl.style.display = "none";
+    window._fullCount = 0;   // map ignores the infinite-scroll list
+    return;
+  }
   if (viewMode === "table") {
     grid.className = "tablewrap";
     grid.innerHTML = tableHTML(slice);
@@ -4767,15 +4830,15 @@ document.getElementById("sort").addEventListener("change", e => {
 });
 function setView(mode) {
   viewMode = mode; renderLimit = 60;
-  const cardsBtn = document.getElementById("viewCards"), tableBtn = document.getElementById("viewTable");
-  cardsBtn.classList.toggle("active", mode === "cards");
-  tableBtn.classList.toggle("active", mode === "table");
-  cardsBtn.setAttribute("aria-pressed", mode === "cards");
-  tableBtn.setAttribute("aria-pressed", mode === "table");
+  for (const m of ["cards", "table", "map"]) {
+    const btn = document.getElementById("view" + m.charAt(0).toUpperCase() + m.slice(1));
+    if (btn) { btn.classList.toggle("active", mode === m); btn.setAttribute("aria-pressed", String(mode === m)); }
+  }
   render();
 }
 document.getElementById("viewCards").addEventListener("click", () => setView("cards"));
 document.getElementById("viewTable").addEventListener("click", () => setView("table"));
+document.getElementById("viewMap").addEventListener("click", () => setView("map"));
 
 const costSlider = document.getElementById("costSlider");
 const costSliderVal = document.getElementById("costSliderVal");
