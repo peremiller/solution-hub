@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Solution Hub">
+  <rect width="128" height="128" rx="28" fill="#161f3d"/>
+  <circle cx="64" cy="64" r="38" fill="none" stroke="#ffd54a" stroke-width="10"/>
+  <circle cx="64" cy="64" r="14" fill="none" stroke="#4ad0ff" stroke-width="10"/>
+</svg>
