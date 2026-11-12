@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>VoltDown — 1000 Solutions to High Electricity Prices</title>
+<title>Solution Hub — Explore 21 Domains and Illustrative Solutions</title>
+<meta name="description" content="Explore 21 solution domains with transparent illustrative estimates, tasks and saved browser-local progress. Not professional advice." />
 <link rel="icon" type="image/svg+xml" href="favicon.svg" />
 <style>
   :root {
@@ -135,6 +136,10 @@
   .chip.active { color: #0b1020; background: var(--accent-2); border-color: var(--accent-2); font-weight: 600; }
   .chip-toggle { color: var(--accent-2); border-style: dashed; font-weight: 600; }
   .count { color: var(--muted); font-size: 13px; margin-left: auto; }
+  .skip-link { position: fixed; left: 12px; top: -70px; padding: 12px 16px; z-index: 1000; border-radius: 9px; background: var(--bg-soft); color: var(--txt); border: 2px solid var(--accent-2); }
+  .skip-link:focus { top: 12px; }
+  :is(button, a, .card, input, select):focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
+  main:focus { outline: none; }
   .sr-only {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -345,6 +350,7 @@
 </style>
 </head>
 <body>
+<a class="skip-link" href="#mainContent">Skip to solutions</a>
 <header>
   <div class="brand">
     <div class="logo" id="hubLogo">◎</div>
@@ -407,7 +413,7 @@
   </div>
 </div>
 
-<main>
+<main id="mainContent" tabindex="-1">
   <div class="grid" id="grid"></div>
   <div class="empty" id="empty" style="display:none;">No solutions match your filters.</div>
   <div class="sentinel" id="sentinel"></div>
@@ -416,7 +422,7 @@
 <div class="backdrop" id="backdrop"></div>
 <aside class="detail" id="detail" role="dialog" aria-modal="true" aria-labelledby="detailTitle" tabindex="-1"></aside>
 
-<footer>VoltDown · Generated locally in your browser · Status changes saved to this device only.</footer>
+<footer>Solution Hub · Illustrative planning data · Status changes saved to this device only.</footer>
 <div id="srAnnounce" class="sr-only" role="status" aria-live="polite"></div>
 
 <script>
@@ -4510,9 +4516,11 @@ function buildDomain(d){
   for (const so of sols){ const c = so.subs.reduce((a,x)=>a+(x.cost||0),0); if (c<mn) mn=c; if (c>mx) mx=c; }
   return { sols, mn, mx };
 }
-function switchDomain(key){
+function switchDomain(key, {fromRoute = false} = {}){
   const d = HUB_DOMAINS.find(x => x.key === key) || HUB_DOMAINS[0];
   if (!d) return;
+  // Close the previous domain's panel before replacing its underlying solution data.
+  if (activeDomainKey && activeDomainKey !== d.key) closeDetail({fromRoute: true});
   activeDomain = d; activeDomainKey = d.key;
   COMPANIES = d.COMPANIES || {};
   if (!domainCache[d.key]) domainCache[d.key] = buildDomain(d);
@@ -4533,6 +4541,7 @@ function switchDomain(key){
   updateBrand(d);
   renderChips(); renderStats(); setView("cards");
   const ds = document.getElementById("domainSelect"); if (ds && ds.value !== d.key) ds.value = d.key;
+  if (!fromRoute) updateRoute(d.key, null);
   window.scrollTo(0, 0);
 }
 function updateBrand(d){
@@ -4551,6 +4560,29 @@ function buildDomainSwitcher(){
     '<optgroup label="' + g + '">' + groups[g].map(d => '<option value="' + d.key + '">' + d.name + "</option>").join("") + "</optgroup>"
   ).join("");
   ds.addEventListener("change", e => switchDomain(e.target.value));
+}
+
+/* ---------- Stable per-domain solution links; unrelated URL state is preserved ---------- */
+function updateRoute(domainKey, solutionId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("domain", domainKey);
+  if (solutionId) url.searchParams.set("solution", String(solutionId));
+  else url.searchParams.delete("solution");
+  if (url.href !== window.location.href) window.history.pushState(null, "", url);
+}
+function readRoute() {
+  const params = new URL(window.location.href).searchParams;
+  const d = HUB_DOMAINS.find(x => x.key === params.get("domain")) || HUB_DOMAINS[0];
+  const raw = params.get("solution");
+  const id = raw && /^[1-9][0-9]*$/.test(raw) ? Number(raw) : null;
+  return { domain: d && d.key, solution: id && id <= (d.TOTAL || 1000) ? id : null };
+}
+function syncRoute() {
+  const route = readRoute();
+  if (!route.domain) return;
+  if (route.domain !== activeDomainKey) switchDomain(route.domain, {fromRoute: true});
+  if (route.solution) openDetail(route.solution, {fromRoute: true});
+  else closeDetail({fromRoute: true});
 }
 
 /* ---------- Persistence ---------- */
@@ -4928,7 +4960,7 @@ const backdrop = document.getElementById("backdrop");
 
 let lastTrigger = null;
 function setBackgroundInert(on) {
-  ["header", ".stats", ".controls", "main"].forEach(sel => {
+  ["header", ".stats", ".controls", "main", "footer", ".skip-link"].forEach(sel => {
     const elx = document.querySelector(sel);
     if (!elx) return;
     if (on) { elx.setAttribute("inert", ""); elx.setAttribute("aria-hidden", "true"); }
@@ -4938,7 +4970,8 @@ function setBackgroundInert(on) {
 // active highlight works in either view (.card or table tr)
 function highlightEl(id) { return grid.querySelector(`.card[data-id="${id}"], tr[data-id="${id}"]`); }
 const mqMobile = window.matchMedia("(max-width: 760px)");
-function openDetail(solId) {
+function openDetail(solId, {fromRoute = false} = {}) {
+  if (!Number.isInteger(solId) || solId < 1 || solId > SOLUTIONS.length) return;
   const prev = currentSolId;
   lastTrigger = grid.querySelector(`.card[data-id="${solId}"]`) || document.activeElement;
   if (solId !== prev) expandedSteps = new Set(); // reset step expansion when switching solutions
@@ -4958,8 +4991,9 @@ function openDetail(solId) {
   else { backdrop.classList.remove("open"); setBackgroundInert(false); }
   const closeBtn = document.getElementById("detailClose");
   if (closeBtn) closeBtn.focus();
+  if (!fromRoute) updateRoute(activeDomainKey, solId);
 }
-function closeDetail() {
+function closeDetail({fromRoute = false} = {}) {
   if (!currentSolId && !detail.classList.contains("open")) return;
   detail.classList.remove("open");
   backdrop.classList.remove("open");
@@ -4971,6 +5005,7 @@ function closeDetail() {
   const target = lastTrigger || activeEl;
   if (target && target.focus) target.focus();
   lastTrigger = null;
+  if (!fromRoute) updateRoute(activeDomainKey, null);
 }
 
 // Seeded duration (weeks) for a subtask — independent seed, doesn't perturb other data.
@@ -5096,16 +5131,29 @@ detail.addEventListener("click", e => {
     const idx = +steps.dataset.steps;
     if (expandedSteps.has(idx)) expandedSteps.delete(idx); else expandedSteps.add(idx);
     renderDetail();
+    const nextToggle = detail.querySelector('.steps-toggle[data-steps="' + idx + '"]');
+    if (nextToggle) nextToggle.focus();
     return;
   }
   const btn = e.target.closest(".status-btn");
   if (btn && currentSolId) {
-    cycleSub(currentSolId, +btn.dataset.sub);
+    const idx = +btn.dataset.sub;
+    cycleSub(currentSolId, idx);
     renderDetail();
+    const nextButton = detail.querySelector('.status-btn[data-sub="' + idx + '"]');
+    if (nextButton) nextButton.focus();
   }
 });
 backdrop.addEventListener("click", closeDetail);
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeDetail(); });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") { closeDetail(); return; }
+  if (e.key !== "Tab" || !mqMobile.matches || !detail.classList.contains("open")) return;
+  const focusables = [...detail.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter(el => !el.hidden);
+  if (!focusables.length) { e.preventDefault(); detail.focus(); return; }
+  const first = focusables[0], last = focusables[focusables.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
 
 /* ---------- Infinite scroll ---------- */
 const sentinel = document.getElementById("sentinel");
@@ -5138,7 +5186,8 @@ themeToggle.addEventListener("click", () => {
 /* ---------- Init ---------- */
 initTheme();
 buildDomainSwitcher();
-switchDomain(HUB_DOMAINS[0] && HUB_DOMAINS[0].key);
+syncRoute();
+window.addEventListener("popstate", syncRoute);
 </script>
 </body>
 </html>
