@@ -5087,10 +5087,14 @@ function renderDetail() {
     <div class="detail-sec">Timeline</div>
     ${timelineHTML(sol)}
     <div class="detail-sec">Who's working on this</div>
-    <div class="orgs">${(COMPANIES[sol.catKey] || []).map(name => {
-      const q = name.replace(/\s*\([^)]*\)\s*/g, " ").trim();      // drop parenthetical notes
-      const href = "https://duckduckgo.com/?q=" + encodeURIComponent("\\" + q); // \ = jump to top result (official site)
-      return `<a class="org" href="${href}" target="_blank" rel="noopener">${escapeHTML(name)} ↗</a>`;
+    <div class="orgs">${(COMPANIES[sol.catKey] || []).map(item => {
+      // Domain packs contain both string names and [name, homepage] pairs.
+      // Keep the established search-link behavior without rendering unsanitized URLs.
+      const label = typeof item === "string" ? item : (Array.isArray(item) && typeof item[0] === "string" ? item[0] : "");
+      if (!label) return "";
+      const q = label.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+      const href = "https://duckduckgo.com/?q=" + encodeURIComponent("\\" + q);
+      return `<a class="org" href="${href}" target="_blank" rel="noopener noreferrer">${escapeHTML(label)} ↗</a>`;
     }).join("")}</div>
     <p class="detail-note">Cost figures, statuses, and the impact / feasibility / business-feasibility / profit-potential scores are illustrative seeded estimates, not sourced data or financial advice. PHP (₱) amounts are converted at an approximate ${USD_PHP} ₱/$ rate — not a live quote. The organizations above are real companies/institutions active in the <strong>${escapeHTML(sol.cat)}</strong> space — listed at the category level as illustrative, non-exhaustive examples (not endorsements, not tied to this specific solution). Click a status to advance it (To-do → In progress → Done → Blocked).</p>`;
 }
