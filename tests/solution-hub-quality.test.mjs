@@ -32,7 +32,9 @@ for (const [width, height, theme] of [[320, 720, "dark"], [390, 844, "light"], [
       assert.equal(await page.evaluate(() => document.activeElement.className), "skip-link");
       await page.keyboard.press("Enter");
       assert.equal(await page.evaluate(() => document.activeElement.id), "mainContent");
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, "No viewport overflow at " + width + "px");
+      const overflow = await page.evaluate(() => ({vw:innerWidth,doc:document.documentElement.scrollWidth,els:[...document.querySelectorAll("body *")].filter(el=>{const b=el.getBoundingClientRect();return b.right>innerWidth+1||b.left< -1}).slice(0,12).map(el=>({node:el.tagName,cls:el.className,id:el.id,r:Math.round(el.getBoundingClientRect().right)}))}));
+      if (overflow.doc > width + 1) console.log("Overflow diagnostic:", JSON.stringify(overflow));
+      assert.equal(overflow.doc <= width+1,true,"No viewport overflow at "+width+"px");
 
       await page.locator("#themeToggle").click();
       assert.equal(await page.locator("#themeToggle").getAttribute("aria-pressed"), "true");
@@ -41,6 +43,7 @@ for (const [width, height, theme] of [[320, 720, "dark"], [390, 844, "light"], [
       await page.selectOption("#domainSelect","disease");
       assert.equal(new URL(page.url()).searchParams.get("domain"), "disease");
       await page.locator(".card").first().click();
+      console.log("Route diagnostic:",width,page.url(), await page.locator("#detail").evaluate(el=>el.className));
       assert.equal(new URL(page.url()).searchParams.get("solution"), "1");
       assert.equal(new URL(page.url()).searchParams.get("campaign"), "qa");
       assert.equal(new URL(page.url()).hash, "#reference");
