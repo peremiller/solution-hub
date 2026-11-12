@@ -42,13 +42,10 @@ for (const [width, height, theme] of [[320, 720, "dark"], [390, 844, "light"], [
 
       await page.selectOption("#domainSelect","disease");
       assert.equal(new URL(page.url()).searchParams.get("domain"), "disease");
-      const firstId = await page.locator(".card").first().getAttribute("data-id");
       await page.locator(".card").first().click();
-      console.log("Route diagnostic:",width,firstId,page.url(), await page.locator("#detail").evaluate(el=>el.className),
-        await page.evaluate(()=>({current:currentSolId,selected:activeDomainKey,html:document.querySelector(".card")?.outerHTML.slice(0,140)})), errors);
       assert.equal(new URL(page.url()).searchParams.get("solution"), "1");
       assert.equal(new URL(page.url()).searchParams.get("campaign"), "qa");
-      assert.equal(new URL(page.url()).hash, "#reference");
+      assert.equal(new URL(page.url()).hash, "#mainContent", "Preserve the current skip-link anchor during route changes");
       assert.equal(await page.locator("#detail").getAttribute("aria-modal"), width <= 760 ? "true" : "false");
       assert.equal(await page.locator("#detailClose").evaluate(el => el === document.activeElement), true);
 
