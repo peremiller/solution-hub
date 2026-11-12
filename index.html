@@ -344,6 +344,8 @@
   }
   .reset:hover { border-color: var(--red); color: var(--red); }
   @media (max-width: 720px) {
+    /* On narrow screens the stacked controls obscure solution cards when sticky. */
+    .controls { position: static; }
     .stats { grid-template-columns: repeat(2, 1fr); }
     .grid { grid-template-columns: 1fr; }
     .slider-wrap { width: 100%; min-width: 0; flex-wrap: wrap; }
