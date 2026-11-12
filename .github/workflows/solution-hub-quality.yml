@@ -1,0 +1,30 @@
+name: Solution Hub Web Quality
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save playwright@1.58.2
+          npx playwright install --with-deps chromium
+      - name: Run real-browser navigation, data-preservation and keyboard regressions
+        run: node --test tests/solution-hub-quality.test.mjs
+      - name: Confirm source data packs and original progress keys remain
+        run: |
+          test -f index.html
+          test -d packs
+          node -e "const fs=require('fs');let s=fs.readFileSync('index.html','utf8');if((s.match(/HUB_DOMAINS\\.push\\(/g)||[]).length!==21||!s.includes('voltdown_status_v1'))process.exit(1)"
